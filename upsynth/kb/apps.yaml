@@ -184,6 +184,8 @@ apps:
 - {name: alibaba, category: other, domains: [aliyun.com, aliyuncs.com, alikunlun.com, aliapp.org, alibabausercontent.com, alibabadns.com]}
 - {name: amazon_aws, category: cdn, domains: [amazonaws.com, cloudfront.net, awsstatic.com, amazonaws.com.cn]}
 - {name: apple_push, category: other, domains: [push.apple.com, courier.push.apple.com], ports: [tcp/5223]}
+- {name: apple_push_443, category: other, ports: [tcp/443], alpn: [apns-security-v3, apns-pack-v1, apns-security-v2]}
+- {name: aws_iot_mqtt, category: other, ports: [tcp/443], alpn: [x-amzn-mqtt-ca, x-amzn-http-ca]}
 - {name: google_fcm, category: other, domains: [mtalk.google.com, fcm.googleapis.com, firebaseinstallations.googleapis.com], ports: [tcp/5228]}
 # ---------------------------------------------------------------- ads / analytics
 - {name: google_ads, category: ads_analytics, domains: [doubleclick.net, googlesyndication.com, googleadservices.com, google-analytics.com, googletagmanager.com, googletagservices.com, admob.com, app-measurement.com, firebaselogging-pa.googleapis.com, crashlytics.com]}
@@ -204,6 +206,7 @@ apps:
 # ---------------------------------------------------------------- infrastructure
 - {name: dns, category: dns, ports: [udp/53, tcp/53]}
 - {name: dns_over_tls, category: dns, ports: [tcp/853]}
+- {name: dns_over_quic, category: dns, ports: [udp/853], alpn: [doq]}
 - {name: dns_over_https, category: dns, domains: [dns.google, dns.google.com, cloudflare-dns.com, one.one.one.one, doh.pub, dns.alidns.com, doh.360.cn, dns.quad9.net, dns.nextdns.io, mozilla.cloudflare-dns.com]}
 - {name: ntp, category: ntp, domains: [time.apple.com, time.google.com, time.windows.com, pool.ntp.org, ntp.aliyun.com, time.android.com, ntp.tencent.com], ports: [udp/123]}
 - {name: ipsec_vpn, category: vpn, ports: [udp/500, udp/4500]}

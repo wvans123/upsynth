@@ -40,7 +40,7 @@ JA4 按 FoxIO 规范：`t13d1516h2_<排序后加密套件的 sha256 前 12 位>_
 
 ## label
 
-知识库 `upsynth/kb/apps.yaml`，185 个应用，每条有名字、类别、域名、ASN、端口、ALPN、JA4，可选 synth 模板名。来源是 MIRAGE-2019 / MIRAGE-AppAct-2024 的应用清单、厂商的网络需求页、nDPI 的主机名表，加上国内常用应用。
+知识库 `upsynth/kb/apps.yaml`，188 个应用，每条有名字、类别、域名、ASN、端口、ALPN、JA4，可选 synth 模板名。来源是 MIRAGE-2019 / MIRAGE-AppAct-2024 的应用清单、厂商的网络需求页、nDPI 的主机名表，加上国内常用应用。
 
 规则顺序，先命中先用：
 

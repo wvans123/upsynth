@@ -49,6 +49,15 @@ def test_rule_order(m):
     assert m.label(base)[:3] == ("unknown", "other", "none")
 
 
+def test_alpn_narrows_a_port_rule(m):
+    base = {"proto": 6, "server_port": 443, "sni": None, "http_host": None, "dns_name": None, "ja4": None,
+            "asn": None, "ndpi_app": None}
+    assert m.label({**base, "alpn": "apns-security-v3"})[:3] == ("apple_push_443", "other", "port")
+    assert m.label({**base, "alpn": "x-amzn-mqtt-ca"})[0] == "aws_iot_mqtt"
+    assert m.label({**base, "alpn": "h2,http/1.1"})[0] == "unknown"
+    assert m.label({**base, "alpn": None})[0] == "unknown"
+
+
 def test_conflicting_kb_is_rejected():
     kb = KnowledgeBase.model_validate({"apps": [{"name": "a", "category": "web", "domains": ["x.com"]},
                                                 {"name": "b", "category": "web", "domains": ["x.com"]}]})

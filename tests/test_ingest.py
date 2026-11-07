@@ -47,6 +47,53 @@ def test_no_raw_addresses_or_payload(work):
     assert all(len(t) == 16 for t in ue_tokens)
 
 
+def test_tcp_flows_end_on_fin(work):
+    rows = pq.read_table(work / "flows.parquet").to_pylist()
+    assert {r["end_reason"] for r in rows if r["proto"] == 6} == {"fin"}
+
+
+def _tcp_pcap(path, events):
+    """events: (t, from_ue, flags, payload) on one 5-tuple; writes an N6 pcap."""
+    from upsynth.synth import packets as P
+
+    ue, srv = ipaddress.ip_address("10.45.0.9").packed, ipaddress.ip_address("198.18.0.9").packed
+    with open(path, "wb") as f:
+        w = P.PcapWriter(f)
+        seq = {True: 1000, False: 5000}
+        for t, up, flags, data in events:
+            src, dst, sp, dp = (ue, srv, 40000, 443) if up else (srv, ue, 443, 40000)
+            seg = P.tcp(src, dst, sp, dp, seq[up], seq[not up], flags, data)
+            seq[up] += len(data) + (1 if flags & (P.TCP_SYN | P.TCP_FIN) else 0)
+            w.write(t, P.ethernet(b"\x02" * 6, b"\x04" * 6, P.ip_packet(src, dst, 6, seg)))
+
+
+def test_tcp_rst_ends_flow_and_new_syn_starts_one(tmp_path):
+    from upsynth.synth import packets as P
+
+    S, SA, A, R, PA = P.TCP_SYN, P.TCP_SYN | P.TCP_ACK, P.TCP_ACK, P.TCP_RST | P.TCP_ACK, P.TCP_PSH | P.TCP_ACK
+    _tcp_pcap(tmp_path / "rst.pcap", [
+        (1.0, True, S, b""), (1.01, False, SA, b""), (1.02, True, A, b""), (1.03, True, PA, b"x" * 100),
+        (1.05, False, R, b""), (1.5, True, A, b""),  # stray ACK after the RST belongs to the same flow
+        (10.0, True, S, b""), (10.01, False, SA, b""), (10.02, True, A, b""),  # same 5-tuple, new connection
+    ])
+    ingest.run(tmp_path / "rst.pcap", tmp_path / "f.parquet", key=KEY)
+    rows = pq.read_table(tmp_path / "f.parquet").to_pylist()
+    assert [(r["end_reason"], r["pkts_up"], r["pkts_down"]) for r in rows] == [("rst", 4, 2), ("eof", 2, 1)]
+
+
+def test_pcapng_input(work, tmp_path):
+    import dpkt
+
+    src = work / "sample_n6.pcap"
+    with open(src, "rb") as f, open(tmp_path / "s.pcapng", "wb") as g:
+        w = dpkt.pcapng.Writer(g, linktype=1)
+        for ts, buf in dpkt.pcap.Reader(f):
+            w.writepkt(buf, ts)
+    a = ingest.run(src, tmp_path / "a.parquet", key=KEY)
+    b = ingest.run(tmp_path / "s.pcapng", tmp_path / "b.parquet", key=KEY)
+    assert a["flows"] == b["flows"] == 106 and a["with_sni"] == b["with_sni"]
+
+
 def test_dns_name_needs_same_ue_and_window():
     c = ingest.DnsCache(window=10)
     ue1, ue2, srv = b"\x0a\x00\x00\x01", b"\x0a\x00\x00\x02", b"\xc6\x12\x00\x01"
