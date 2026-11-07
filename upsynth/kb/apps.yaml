@@ -1,0 +1,213 @@
+# upsynth application knowledge base.
+#
+# domains: "example.com" matches the name and every subdomain; the longest matching suffix wins
+#          across all apps, so mail.google.com goes to gmail before google. "*" globs, "re:" regex.
+# asns:    only networks the app uses alone (a cloud or CDN ASN is never listed under an app).
+# ports:   "udp/3478" or "tcp/8801-8810"; used when a flow has no name. alpn narrows a port match.
+# Sources: MIRAGE-2019 / MIRAGE-AppAct-2024 app lists, vendor network requirement pages, nDPI host
+# lists. Changes are reviewed by a person before merge.
+version: 1
+apps:
+# ---------------------------------------------------------------- video
+- {name: youtube, category: video, domains: [youtube.com, googlevideo.com, ytimg.com, youtu.be, youtube-nocookie.com, youtubei.googleapis.com, yt3.ggpht.com], asns: [36040]}
+- {name: netflix, category: video, domains: [netflix.com, nflxvideo.net, nflximg.net, nflxext.com, nflxso.net, netflix.net], asns: [2906, 40027]}
+- {name: prime_video, category: video, domains: [primevideo.com, aiv-cdn.net, aiv-delivery.net, amazonvideo.com, media-amazon.com, pv-cdn.net]}
+- {name: disney_plus, category: video, domains: [disneyplus.com, disney-plus.net, dssott.com, bamgrid.com, disneystreaming.com]}
+- {name: hbo_max, category: video, domains: [max.com, hbomax.com, hbo.com, hbomaxcdn.com]}
+- {name: hulu, category: video, domains: [hulu.com, hulustream.com, huluim.com]}
+- {name: vimeo, category: video, domains: [vimeo.com, vimeocdn.com]}
+- {name: dailymotion, category: video, domains: [dailymotion.com, dmcdn.net, dm-event.net]}
+- {name: iqiyi, category: video, domains: [iqiyi.com, qy.net, iqiyipic.com, ppsimg.com, iq.com, 71.am]}
+- {name: youku, category: video, domains: [youku.com, ykimg.com, soku.com, youku.tv]}
+- {name: tencent_video, category: video, domains: [v.qq.com, video.qq.com, vv.video.qq.com]}
+- {name: mango_tv, category: video, domains: [mgtv.com, hitv.com, imgo.tv]}
+- {name: bilibili, category: video, domains: [bilibili.com, bilivideo.com, bilivideo.cn, hdslb.com, biliapi.net, biliapi.com, b23.tv, acgvideo.com]}
+- {name: apple_tv, category: video, domains: [tv.apple.com, hls.itunes.apple.com, play-edge.itunes.apple.com]}
+# ---------------------------------------------------------------- short video / live
+- {name: tiktok, category: short_video, domains: [tiktok.com, tiktokv.com, tiktokcdn.com, tiktokcdn-us.com, ttwstatic.com, musical.ly, byteoversea.com, ibytedtos.com, tiktokv.us]}
+- {name: douyin, category: short_video, domains: [douyin.com, douyinpic.com, douyinvod.com, douyinstatic.com, amemv.com, douyincdn.com, iesdouyin.com, zjcdn.com]}
+- {name: kuaishou, category: short_video, domains: [kuaishou.com, gifshow.com, kwai.com, kwimgs.com, yximgs.com, kwaicdn.com, ksapisrv.com]}
+- {name: twitch, category: live_streaming, domains: [twitch.tv, ttvnw.net, jtvnw.net, twitchcdn.net, twitchsvc.net, live-video.net]}
+- {name: huya, category: live_streaming, domains: [huya.com, msstatic.com, huyaimg.com]}
+- {name: douyu, category: live_streaming, domains: [douyu.com, douyucdn.cn, douyucdn2.cn]}
+- {name: kick, category: live_streaming, domains: [kick.com]}
+- {name: rtmp_live, category: live_streaming, ports: [tcp/1935]}
+# ---------------------------------------------------------------- music
+- {name: spotify, category: music, domains: [spotify.com, scdn.co, spotifycdn.com, spotilocal.com, spotify.design, pscdn.co, spotifycdn.net, "*spotify*.akamaized.net", "*spotify*.akamaihd.net"], asns: [8403]}
+- {name: apple_music, category: music, domains: [music.apple.com, aod.itunes.apple.com, audio-ssl.itunes.apple.com]}
+- {name: youtube_music, category: music, domains: [music.youtube.com]}
+- {name: soundcloud, category: music, domains: [soundcloud.com, sndcdn.com]}
+- {name: deezer, category: music, domains: [deezer.com, dzcdn.net]}
+- {name: netease_music, category: music, domains: [music.163.com, music.126.net, music.163.cn]}
+- {name: qq_music, category: music, domains: [y.qq.com, music.qq.com, stream.qqmusic.qq.com, qqmusic.qq.com, y.gtimg.cn]}
+- {name: kugou, category: music, domains: [kugou.com, kgimg.com]}
+# ---------------------------------------------------------------- social
+- {name: facebook, category: social, domains: [facebook.com, fbcdn.net, fb.com, facebook.net, fbsbx.com, fb.me, fbcdn.com], asns: [32934]}
+- {name: instagram, category: social, domains: [instagram.com, cdninstagram.com, ig.me, instagr.am]}
+- {name: threads, category: social, domains: [threads.net, threads.com]}
+- {name: twitter_x, category: social, domains: [twitter.com, x.com, twimg.com, t.co, twttr.com, video.twimg.com, pscp.tv], asns: [13414]}
+- {name: reddit, category: social, domains: [reddit.com, redd.it, redditmedia.com, redditstatic.com, redditspace.com]}
+- {name: linkedin, category: social, domains: [linkedin.com, licdn.com, lnkd.in]}
+- {name: pinterest, category: social, domains: [pinterest.com, pinimg.com, pin.it]}
+- {name: snapchat, category: social, domains: [snapchat.com, snap.com, sc-cdn.net, snapkit.com, sc-static.net, snapads.com, feelinsonice-hrd.appspot.com]}
+- {name: tumblr, category: social, domains: [tumblr.com]}
+- {name: weibo, category: social, domains: [weibo.com, weibo.cn, sinaimg.cn, weibocdn.com, sina.com.cn]}
+- {name: xiaohongshu, category: social, domains: [xiaohongshu.com, xhscdn.com, xhslink.com, xhscdn.net]}
+- {name: zhihu, category: social, domains: [zhihu.com, zhimg.com]}
+- {name: douban, category: social, domains: [douban.com, doubanio.com]}
+# ---------------------------------------------------------------- messaging
+- {name: whatsapp, category: messaging, domains: [whatsapp.com, whatsapp.net, wa.me, whatsapp.biz]}
+- {name: telegram, category: messaging, domains: [telegram.org, t.me, telegram.me, tdesktop.com, telesco.pe, cdn-telegram.org, telegra.ph], asns: [62041, 62014, 59930, 44907, 211157]}
+- {name: messenger, category: messaging, domains: [messenger.com, m.me, edge-chat.facebook.com, edge-mqtt.facebook.com]}
+- {name: wechat, category: messaging, domains: [weixin.qq.com, wechat.com, wx.qq.com, servicewechat.com, wxs.qq.com, weixinbridge.com, wechatpay.com, pay.weixin.qq.com, wx.qlogo.cn, mmbiz.qpic.cn, extshort.weixin.qq.com, szextshort.weixin.qq.com]}
+- {name: qq, category: messaging, domains: [im.qq.com, qzone.qq.com, qlogo.cn, mobileqq.qq.com, msfwifi.3g.qq.com, qqmail.com]}
+- {name: signal, category: messaging, domains: [signal.org, whispersystems.org, signal.art, signal.group]}
+- {name: line, category: messaging, domains: [line.me, line-apps.com, line-scdn.net, naver.jp, line.naver.jp]}
+- {name: viber, category: messaging, domains: [viber.com, viber.io]}
+- {name: kakaotalk, category: messaging, domains: [kakao.com, kakaocdn.net, kakao.co.kr]}
+- {name: discord, category: messaging, domains: [discord.com, discord.gg, discordapp.com, discordapp.net, discord.media, discordcdn.com]}
+- {name: skype, category: conferencing, domains: [skype.com, skypeassets.com, skype.net]}
+- {name: slack, category: productivity, domains: [slack.com, slack-edge.com, slack-msgs.com, slack-files.com, slack-imgs.com]}
+# ---------------------------------------------------------------- conferencing / voip
+- {name: zoom, category: conferencing, domains: [zoom.us, zoom.com, zoomgov.com, zoomcdn.com], asns: [30103], ports: [udp/8801-8810, tcp/8801-8802]}
+- {name: teams, category: conferencing, domains: [teams.microsoft.com, teams.live.com, teams.cdn.office.net, lync.com, trouter.teams.microsoft.com], ports: [udp/3478-3481]}
+- {name: google_meet, category: conferencing, domains: [meet.google.com, meet.googleapis.com, hangouts.google.com], ports: [udp/19302-19309]}
+- {name: webex, category: conferencing, domains: [webex.com, wbx2.com, ciscospark.com, webexcontent.com], asns: [13445], ports: [udp/9000]}
+- {name: tencent_meeting, category: conferencing, domains: [meeting.tencent.com, meeting.qq.com, voovmeeting.com, wemeet.qq.com]}
+- {name: facetime, category: conferencing, domains: [facetime.apple.com, ess.apple.com], ports: [udp/16384-16387, udp/3478-3497]}
+- {name: sip_voip, category: voip, ports: [udp/5060, tcp/5060, tcp/5061]}
+- {name: stun_turn, category: voip, ports: [udp/3478, tcp/3478, udp/5349, tcp/5349]}
+# ---------------------------------------------------------------- gaming
+- {name: steam, category: gaming, domains: [steampowered.com, steamcommunity.com, steamstatic.com, steamcontent.com, steamserver.net, steamusercontent.com, steamgames.com, valvesoftware.com], asns: [32590], ports: [udp/27015-27050]}
+- {name: epic_games, category: gaming, domains: [epicgames.com, epicgames.dev, unrealengine.com, fortnite.com, epicgames.net]}
+- {name: riot_games, category: gaming, domains: [riotgames.com, leagueoflegends.com, riotcdn.net, pvp.net, playvalorant.com, rgpub.io], asns: [6507]}
+- {name: honor_of_kings, category: gaming, domains: [smoba.qq.com, pvp.qq.com, sgame.qq.com]}
+- {name: pubg_mobile, category: gaming, domains: [pubgmobile.com, igamecj.com, gcloudsdk.com, proximabeta.com, pubg.com]}
+- {name: genshin_impact, category: gaming, domains: [mihoyo.com, hoyoverse.com, yuanshen.com, genshinimpact.com, hoyolab.com]}
+- {name: roblox, category: gaming, domains: [roblox.com, rbxcdn.com, rbx.com, robloxlabs.com], asns: [22697]}
+- {name: minecraft, category: gaming, domains: [minecraft.net, mojang.com, minecraftservices.com], ports: [tcp/25565, udp/19132]}
+- {name: xbox_live, category: gaming, domains: [xboxlive.com, xbox.com, xboxab.com, xboxservices.com], ports: [udp/3074]}
+- {name: playstation, category: gaming, domains: [playstation.net, playstation.com, sonyentertainmentnetwork.com, np.dl.playstation.net]}
+- {name: nintendo, category: gaming, domains: [nintendo.net, nintendo.com, nintendo-europe.com, nintendo.co.jp]}
+- {name: supercell, category: gaming, domains: [supercell.com, supercell.net, clashofclans.com, clashroyale.com, brawlstars.com], ports: [tcp/9339]}
+# ---------------------------------------------------------------- shopping / payment
+- {name: amazon, category: shopping, domains: [amazon.com, amazon.co.uk, amazon.de, amazon.it, amazon.co.jp, amazon.cn, ssl-images-amazon.com, images-amazon.com, a2z.com, amazon-adsystem.com], template: web_browsing}
+- {name: ebay, category: shopping, domains: [ebay.com, ebay.it, ebay.de, ebay.co.uk, ebayimg.com, ebaystatic.com, ebayrtm.com], template: web_browsing}
+- {name: taobao, category: shopping, domains: [taobao.com, tmall.com, alicdn.com, tbcdn.cn, taobaocdn.com, mmstat.com, tanx.com, tb.cn, alibaba.com]}
+- {name: jd, category: shopping, domains: [jd.com, 360buyimg.com, jd.hk, jdpay.com, 3.cn, jcloud.com]}
+- {name: pinduoduo, category: shopping, domains: [pinduoduo.com, yangkeduo.com, pddpic.com, pddugc.com, pdd.net]}
+- {name: aliexpress, category: shopping, domains: [aliexpress.com, aliexpress.us, ae01.alicdn.com]}
+- {name: shein, category: shopping, domains: [shein.com, ltwebstatic.com, sheincorp.cn]}
+- {name: temu, category: shopping, domains: [temu.com, kwcdn.com]}
+- {name: wish, category: shopping, domains: [wish.com, contextlogic.com]}
+- {name: meituan, category: shopping, domains: [meituan.com, meituan.net, dianping.com, sankuai.com, dpfile.com]}
+- {name: eleme, category: shopping, domains: [ele.me, elemecdn.com]}
+- {name: alipay, category: payment, domains: [alipay.com, alipayobjects.com, alipay-eco.com, alipaydns.com, mobilegw.alipay.com, antfin.com, alipay.cn]}
+- {name: paypal, category: payment, domains: [paypal.com, paypalobjects.com, paypal.me, braintreegateway.com]}
+# ---------------------------------------------------------------- maps / ride hailing / travel
+- {name: google_maps, category: maps, domains: [maps.google.com, maps.googleapis.com, maps.gstatic.com, mt0.google.com, mt1.google.com, khms0.google.com, khms1.google.com, kh.google.com]}
+- {name: amap, category: maps, domains: [amap.com, autonavi.com, gaode.com, is.autonavi.com]}
+- {name: baidu_maps, category: maps, domains: [map.baidu.com, api.map.baidu.com, map.bdimg.com]}
+- {name: waze, category: maps, domains: [waze.com]}
+- {name: apple_maps, category: maps, domains: [ls.apple.com, gsp-ssl.ls.apple.com, gspe1-ssl.ls.apple.com, cdn.apple-mapkit.com]}
+- {name: uber, category: ride_hailing, domains: [uber.com, ubercdn.com, uberinternal.com]}
+- {name: didi, category: ride_hailing, domains: [didiglobal.com, xiaojukeji.com, didichuxing.com, diditaxi.com.cn, didistatic.com]}
+- {name: grab, category: ride_hailing, domains: [grab.com, grabtaxi.com]}
+- {name: lyft, category: ride_hailing, domains: [lyft.com, lyftcdn.net]}
+- {name: booking, category: travel, domains: [booking.com, bstatic.com, booking.net], template: web_browsing}
+- {name: tripadvisor, category: travel, domains: [tripadvisor.com, tacdn.com, tripadvisor.it, tamgrt.com], template: web_browsing}
+- {name: trivago, category: travel, domains: [trivago.com, trivago.it, trvl-media.com], template: web_browsing}
+- {name: airbnb, category: travel, domains: [airbnb.com, muscache.com, airbnb.cn], template: web_browsing}
+- {name: ctrip, category: travel, domains: [ctrip.com, trip.com, c-ctrip.com, tripcdn.com, tripcdn.cn, ctripcorp.com]}
+- {name: expedia, category: travel, domains: [expedia.com, expedia-aarp.com, travel-assets.com], template: web_browsing}
+# ---------------------------------------------------------------- news / search / web
+- {name: bbc, category: news, domains: [bbc.co.uk, bbc.com, bbci.co.uk], template: web_browsing}
+- {name: cnn, category: news, domains: [cnn.com, cnn.io, turner.com], template: web_browsing}
+- {name: nytimes, category: news, domains: [nytimes.com, nyt.com], template: web_browsing}
+- {name: toutiao, category: news, domains: [toutiao.com, snssdk.com, pstatp.com, toutiaoimg.com, toutiaocdn.com, ixigua.com, toutiaostatic.com]}
+- {name: flipboard, category: news, domains: [flipboard.com, flipboard.cn]}
+- {name: netease, category: news, domains: [163.com, 126.net, 127.net, netease.com, ydstatic.com, 163yun.com], template: web_browsing}
+- {name: yahoo, category: news, domains: [yahoo.com, yimg.com, yahoodns.net, yahoo.co.jp, aol.com], template: web_browsing}
+- {name: google_search, category: search, domains: [www.google.com, google.com.hk, google.co.uk, google.de, google.it, google.co.jp, encrypted.google.com, suggestqueries.google.com], template: web_browsing}
+- {name: bing, category: search, domains: [bing.com, bing.net, bing.com.cn], template: web_browsing}
+- {name: baidu, category: search, domains: [baidu.com, bdstatic.com, bdimg.com, baidustatic.com, bcebos.com], template: web_browsing}
+- {name: duckduckgo, category: search, domains: [duckduckgo.com], template: web_browsing}
+- {name: yandex, category: search, domains: [yandex.ru, yandex.com, yandex.net, yastatic.net], template: web_browsing}
+- {name: wikipedia, category: web, domains: [wikipedia.org, wikimedia.org, wikidata.org, wiktionary.org, wikibooks.org], asns: [14907], template: web_browsing}
+- {name: web_http, category: web, ports: [tcp/80, tcp/8080], template: web_browsing}
+# ---------------------------------------------------------------- email
+- {name: gmail, category: email, domains: [mail.google.com, gmail.com, inbox.google.com, googlemail.com]}
+- {name: outlook, category: email, domains: [outlook.com, outlook.live.com, outlook.office.com, outlook.office365.com, hotmail.com, live.com]}
+- {name: qq_mail, category: email, domains: [mail.qq.com, exmail.qq.com, imap.qq.com, smtp.qq.com]}
+- {name: netease_mail, category: email, domains: [mail.163.com, mail.126.com, mail.yeah.net, 126.com, yeah.net, 188.com, mail.netease.com]}
+- {name: yahoo_mail, category: email, domains: [mail.yahoo.com, mg.mail.yahoo.com]}
+- {name: email_protocols, category: email, ports: [tcp/25, tcp/465, tcp/587, tcp/993, tcp/995, tcp/143, tcp/110]}
+# ---------------------------------------------------------------- cloud storage / productivity
+- {name: dropbox, category: cloud_storage, domains: [dropbox.com, dropboxapi.com, dropboxstatic.com, dropboxusercontent.com, db.tt], asns: [19679]}
+- {name: onedrive, category: cloud_storage, domains: [onedrive.com, onedrive.live.com, 1drv.com, 1drv.ms, storage.live.com, sharepoint.com]}
+- {name: google_drive, category: cloud_storage, domains: [drive.google.com, drive.googleapis.com, docs.googleusercontent.com, drive-thirdparty.googleusercontent.com]}
+- {name: icloud, category: cloud_storage, domains: [icloud.com, icloud-content.com, icloud.com.cn, apple-cloudkit.com, me.com]}
+- {name: baidu_netdisk, category: cloud_storage, domains: [pan.baidu.com, baidupcs.com, yun.baidu.com, pcs.baidu.com]}
+- {name: mega, category: cloud_storage, domains: [mega.nz, mega.co.nz, mega.io]}
+- {name: office365, category: productivity, domains: [office.com, office.net, office365.com, officeapps.live.com, microsoftonline.com, msauth.net, msftauth.net, cloud.microsoft]}
+- {name: google_docs, category: productivity, domains: [docs.google.com, sheets.google.com, slides.google.com]}
+- {name: notion, category: productivity, domains: [notion.so, notion.com, notion.site, notion-static.com]}
+- {name: github, category: productivity, domains: [github.com, githubusercontent.com, githubassets.com, github.io, ghcr.io, githubcopilot.com], asns: [36459]}
+- {name: dingtalk, category: productivity, domains: [dingtalk.com, dingtalkapps.com, dingtalk.cn]}
+- {name: feishu, category: productivity, domains: [feishu.cn, larksuite.com, feishucdn.com, larkoffice.com, feishu.net, larksuitecdn.com]}
+- {name: wps, category: productivity, domains: [wps.cn, wps.com, kdocs.cn, wpscdn.cn, ksord.com]}
+# ---------------------------------------------------------------- ai
+- {name: chatgpt, category: ai, domains: [chatgpt.com, openai.com, oaiusercontent.com, oaistatic.com, chat.openai.com]}
+- {name: claude, category: ai, domains: [claude.ai, anthropic.com, claudeusercontent.com]}
+- {name: gemini, category: ai, domains: [gemini.google.com, generativelanguage.googleapis.com, bard.google.com, aistudio.google.com]}
+- {name: deepseek, category: ai, domains: [deepseek.com, deepseek.ai]}
+- {name: doubao, category: ai, domains: [doubao.com, volcengine.com, volces.com]}
+- {name: kimi, category: ai, domains: [kimi.moonshot.cn, moonshot.cn, kimi.com]}
+- {name: qwen, category: ai, domains: [tongyi.aliyun.com, qianwen.aliyun.com, qwen.ai, qianwen.com, dashscope.aliyuncs.com]}
+- {name: perplexity, category: ai, domains: [perplexity.ai, pplx.ai]}
+- {name: copilot, category: ai, domains: [copilot.microsoft.com, sydney.bing.com]}
+# ---------------------------------------------------------------- app stores / os
+- {name: google_play, category: app_store, domains: [play.google.com, play.googleapis.com, android.clients.google.com, play-lh.googleusercontent.com, play-fe.googleapis.com]}
+- {name: apple_app_store, category: app_store, domains: [apps.apple.com, itunes.apple.com, mzstatic.com, appstore.com]}
+- {name: huawei_appgallery, category: app_store, domains: [appgallery.huawei.com, appgallery.cloud.huawei.com, hicloud.com, dbankcdn.com, vmall.com]}
+- {name: xiaomi, category: app_store, domains: [xiaomi.com, mi.com, miui.com, mi-img.com, xiaomi.net, mipush.com]}
+- {name: windows_update, category: os_update, domains: [windowsupdate.com, update.microsoft.com, delivery.mp.microsoft.com, download.windowsupdate.com, wustat.windows.com, dl.delivery.mp.microsoft.com]}
+- {name: apple_update, category: os_update, domains: [mesu.apple.com, swcdn.apple.com, swscan.apple.com, updates.cdn-apple.com, appldnld.apple.com, gdmf.apple.com]}
+- {name: android_update, category: os_update, domains: [android.googleapis.com, gvt1.com, gvt2.com, dl.google.com, ota.googlezip.net]}
+# ---------------------------------------------------------------- platform catch-alls (shorter suffixes lose to the apps above)
+- {name: google, category: other, domains: [google.com, googleapis.com, gstatic.com, googleusercontent.com, ggpht.com, google.cn, gvt3.com, withgoogle.com, goo.gl], asns: [15169, 396982]}
+- {name: apple, category: other, domains: [apple.com, apple.com.cn, cdn-apple.com, aaplimg.com, apple-dns.net, push-apple.com.akadns.net]}
+- {name: microsoft, category: other, domains: [microsoft.com, msn.com, msftconnecttest.com, msedge.net, azureedge.net, live.net, windows.com, windows.net, s-microsoft.com], asns: [8075]}
+- {name: tencent, category: other, domains: [qq.com, gtimg.cn, gtimg.com, qpic.cn, myqcloud.com, tencent.com, tencent-cloud.net, qcloud.com, idqqimg.com, tenpay.com], asns: [45090, 132203]}
+- {name: bytedance, category: other, domains: [bytedance.com, byteimg.com, bytecdn.cn, bytedns.net, byted.org, bytegoofy.com, ibyteimg.com, feiliao.com, zijieapi.com, bytetos.com, byted-static.com, bytescm.com], asns: [396986, 138699]}
+- {name: huawei, category: other, domains: [huawei.com, huaweicloud.com, hwccpc.com, vmall.com.cn, dbankcloud.com, hihonor.com]}
+- {name: alibaba, category: other, domains: [aliyun.com, aliyuncs.com, alikunlun.com, aliapp.org, alibabausercontent.com, alibabadns.com]}
+- {name: amazon_aws, category: cdn, domains: [amazonaws.com, cloudfront.net, awsstatic.com, amazonaws.com.cn]}
+- {name: apple_push, category: other, domains: [push.apple.com, courier.push.apple.com], ports: [tcp/5223]}
+- {name: google_fcm, category: other, domains: [mtalk.google.com, fcm.googleapis.com, firebaseinstallations.googleapis.com], ports: [tcp/5228]}
+# ---------------------------------------------------------------- ads / analytics
+- {name: google_ads, category: ads_analytics, domains: [doubleclick.net, googlesyndication.com, googleadservices.com, google-analytics.com, googletagmanager.com, googletagservices.com, admob.com, app-measurement.com, firebaselogging-pa.googleapis.com, crashlytics.com]}
+- {name: facebook_ads, category: ads_analytics, domains: [graph.facebook.com, an.facebook.com, connect.facebook.net]}
+- {name: appsflyer, category: ads_analytics, domains: [appsflyer.com, appsflyersdk.com, onelink.me]}
+- {name: adjust, category: ads_analytics, domains: [adjust.com, adjust.io, adj.st]}
+- {name: umeng, category: ads_analytics, domains: [umeng.com, umengcloud.com, umeng.co, umsns.com, cnzz.com]}
+- {name: pangle, category: ads_analytics, domains: [pangle.io, pangolin-sdk-toutiao.com, pangolin-sdk-toutiao-b.com, csjplatform.com]}
+- {name: unity_ads, category: ads_analytics, domains: [unityads.unity3d.com, unity3d.com, unity.com, iads.unity3d.com]}
+- {name: sentry, category: ads_analytics, domains: [sentry.io, ingest.sentry.io]}
+- {name: qihoo_ads, category: ads_analytics, domains: [mediav.com]}
+# ---------------------------------------------------------------- cdn
+- {name: cloudflare, category: cdn, domains: [cloudflare.com, cloudflare.net, cloudflareinsights.com, cdnjs.cloudflare.com, workers.dev, pages.dev], asns: [13335]}
+- {name: akamai, category: cdn, domains: [akamaihd.net, akamaized.net, akamaiedge.net, akamai.net, edgekey.net, edgesuite.net, akadns.net], asns: [20940, 16625]}
+- {name: fastly, category: cdn, domains: [fastly.net, fastlylb.net, fastly.com, fastly-edge.com], asns: [54113]}
+- {name: jsdelivr, category: cdn, domains: [jsdelivr.net, unpkg.com]}
+- {name: contentful, category: cdn, domains: [ctfassets.net, contentful.com]}
+# ---------------------------------------------------------------- infrastructure
+- {name: dns, category: dns, ports: [udp/53, tcp/53]}
+- {name: dns_over_tls, category: dns, ports: [tcp/853]}
+- {name: dns_over_https, category: dns, domains: [dns.google, dns.google.com, cloudflare-dns.com, one.one.one.one, doh.pub, dns.alidns.com, doh.360.cn, dns.quad9.net, dns.nextdns.io, mozilla.cloudflare-dns.com]}
+- {name: ntp, category: ntp, domains: [time.apple.com, time.google.com, time.windows.com, pool.ntp.org, ntp.aliyun.com, time.android.com, ntp.tencent.com], ports: [udp/123]}
+- {name: ipsec_vpn, category: vpn, ports: [udp/500, udp/4500]}
+- {name: wireguard, category: vpn, ports: [udp/51820]}
+- {name: openvpn, category: vpn, ports: [udp/1194, tcp/1194]}
+- {name: mqtt, category: other, ports: [tcp/8883, tcp/1883]}
+- {name: connectivity_check, category: other, domains: [captive.apple.com, connectivitycheck.android.com, connectivitycheck.gstatic.com, clients3.google.com, detectportal.firefox.com, connect.rom.miui.com, wifi.vivo.com.cn]}

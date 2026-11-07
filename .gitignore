@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+dist/
+build/
+*.egg-info/
+# real captures and per-flow tables never go into the repository
+*.pcap
+*.pcapng
+*.parquet
+!examples/*.pcap

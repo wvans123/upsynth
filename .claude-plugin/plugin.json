@@ -1,0 +1,8 @@
+{
+  "name": "upsynth",
+  "description": "5G user-plane flow identification and synthesis: pcap -> flows -> app labels / PFD -> profile -> synthetic pcap",
+  "version": "0.1.0",
+  "author": {
+    "name": "upsynth"
+  }
+}

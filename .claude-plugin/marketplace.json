@@ -1,0 +1,13 @@
+{
+  "name": "upsynth",
+  "owner": {
+    "name": "upsynth"
+  },
+  "plugins": [
+    {
+      "name": "upsynth",
+      "source": "./",
+      "description": "5G user-plane flow identification and synthesis (skill; needs the upsynth CLI on PATH)"
+    }
+  ]
+}
