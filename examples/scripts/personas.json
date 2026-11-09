@@ -1,0 +1,48 @@
+{
+  "sessions": [
+    {
+      "persona": "通勤路上的上班族，地铁里刷 15 分钟：先刷一会儿短视频，看了一个美食长视频的一半，最后进一个游戏直播间看到下车",
+      "ue": "ue1",
+      "start": 0,
+      "steps": [
+        {"action": "launch"},
+        {"action": "swipe", "dwell": 4},
+        {"action": "swipe", "dwell": 3},
+        {"action": "swipe", "dwell": 11},
+        {"action": "swipe", "dwell": 2},
+        {"action": "swipe", "dwell": 6},
+        {"action": "back"},
+        {"action": "scroll_feed"},
+        {"action": "open_video"},
+        {"action": "watch", "dwell": 180},
+        {"action": "scroll_comments"},
+        {"action": "back"},
+        {"action": "live_enter"},
+        {"action": "live_watch", "dwell": 240},
+        {"action": "live_watch", "dwell": 200}
+      ]
+    },
+    {
+      "persona": "午休的学生，10 分钟里来回找视频，每个都只看一小段，不看直播",
+      "ue": "ue2",
+      "start": 30,
+      "steps": [
+        {"action": "launch"},
+        {"action": "scroll_feed"},
+        {"action": "open_video"},
+        {"action": "watch", "dwell": 25},
+        {"action": "back"},
+        {"action": "scroll_feed"},
+        {"action": "open_video"},
+        {"action": "watch", "dwell": 60},
+        {"action": "back"},
+        {"action": "scroll_feed"},
+        {"action": "open_video"},
+        {"action": "watch", "dwell": 90},
+        {"action": "scroll_comments"},
+        {"action": "swipe", "dwell": 5},
+        {"action": "swipe", "dwell": 8}
+      ]
+    }
+  ]
+}

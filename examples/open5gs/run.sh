@@ -14,6 +14,10 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# forwarding and NAT do not survive a reboot
+sysctl -qw net.ipv4.ip_forward=1
+iptables -t nat -C POSTROUTING -s 10.45.0.0/16 ! -o ogstun -j MASQUERADE 2>/dev/null ||
+  iptables -t nat -A POSTROUTING -s 10.45.0.0/16 ! -o ogstun -j MASQUERADE
 systemctl restart open5gs-amfd open5gs-smfd open5gs-upfd
 sleep 3
 
@@ -36,7 +40,10 @@ ip netns exec ue ip route add default dev uesimtun0
 mkdir -p /etc/netns/ue
 echo "nameserver 223.5.5.5" > /etc/netns/ue/resolv.conf
 
+# TRAFFIC: what the UE does; default traffic.sh (web pages, HTTP/3, NTP). For a person on Bilibili with an
+# action log: TRAFFIC="/opt/pwvenv/bin/python $HERE/human_bilibili.py --out $OUT/actions.csv --duration $DURATION"
+TRAFFIC=${TRAFFIC:-bash $HERE/traffic.sh}
 ip netns exec ue env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY \
-  timeout "$DURATION" bash "$HERE/traffic.sh" || true
+  timeout "$((DURATION + 30))" bash -c "$TRAFFIC" || true
 sleep 3
 echo "captures in $OUT"

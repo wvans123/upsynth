@@ -113,6 +113,9 @@ def profile(
     min_ues: int = typer.Option(1, help="Apps seen by fewer UEs are folded into 'other'. Raise it before a profile leaves the company."),
     session_gap: float = typer.Option(300.0, help="A pause longer than this (seconds) starts a new UE session."),
     seed: int = typer.Option(0, help="Seed for sequence clustering."),
+    actions: Optional[str] = typer.Option(None, "--actions", help="Also learn an action model: path of an action log CSV (t_start,app,action[,ue]) recorded while the phone was operated, or 'bursts' to find actions in the traffic itself."),
+    burst_gap: float = typer.Option(1.5, help="With --actions bursts: a pause longer than this (s) between flow starts ends a burst."),
+    action_types: int = typer.Option(6, help="With --actions bursts: number of action types to cluster bursts into."),
     as_json: bool = JSON_OPT,
 ):
     """Extract a de-identified traffic profile: labeled.parquet -> profile.json.
@@ -122,11 +125,15 @@ def profile(
     direction and gaps; cluster centers of the first 32 packets; a packet Markov chain; concurrency.
     Per anonymous UE (renumbered): active hours, app mix, session and flow arrival. Only
     distributions, no single flow.
+
+    With --actions: per action (open a video, watch, scroll comments...) the flows it opens, how long
+    people stay, and which action follows. synth --script then plays action scripts.
     """
     from . import profile as mod
 
     try:
-        res = mod.run(labeled, out, min_flows=min_flows, min_ues=min_ues, session_gap=session_gap, seed=seed)
+        res = mod.run(labeled, out, min_flows=min_flows, min_ues=min_ues, session_gap=session_gap, seed=seed,
+                      actions=actions, burst_gap=burst_gap, action_types=action_types)
     except (ValueError, OSError) as e:
         _fail(str(e), as_json)
     _emit(res, as_json)
@@ -147,6 +154,11 @@ def synth(
     mtu: Optional[int] = typer.Option(None, help="Inner MTU. Default 1400 on n3, 1500 on n6."),
     max_flow_packets: int = typer.Option(5000, help="Cap on packets per flow, keeps files small."),
     check: bool = typer.Option(True, "--check/--no-check", help="Run tshark on the output and count malformed packets."),
+    mode: str = typer.Option("flows", help="flows: sessions of flows from app mix and transitions; actions: flows opened by actions walked from the profile's action chain (needs profile --actions)."),
+    script: Optional[Path] = typer.Option(None, "--script", exists=True, dir_okay=False, help="Action script JSON to play (implies --mode actions). See 'upsynth actions PROFILE' for action names and the format."),
+    rtt_ms: float = typer.Option(0.0, help="Imitate a longer path: extra delay (ms) before server answers."),
+    bw_mbps: Optional[float] = typer.Option(None, help="Imitate a slower network: cap on a flow's rate (Mbit/s)."),
+    cdn_region: Optional[str] = typer.Option(None, help="Region code written into CDN host names that carry one, e.g. jssz-ct (cn-jssz-ct-01-01.bilivideo.com)."),
     as_json: bool = JSON_OPT,
 ):
     """Generate a user-plane pcap from a profile: profile.json -> out.pcap + labels.csv.
@@ -156,17 +168,119 @@ def synth(
     ServerHello + application data, QUIC Initial with SNI (decryptable by Wireshark), RTP-like UDP.
     Server addresses come from 198.18.0.0/15 and 2001:db8::/32 so nothing points at a real host.
     The check passes when tshark reports zero malformed packets; exit code 2 if it fails.
+    In action mode labels.csv gets the action of every flow and <out>.actions.csv lists the actions.
     """
     from . import synth as mod
 
     try:
         res = mod.run(profile_path, out, labels, ues=ues, duration=duration, iface=iface, seed=seed, start=start,
-                      apps=app_filter, kb_path=kb, mtu=mtu, max_flow_packets=max_flow_packets, check=check)
+                      apps=app_filter, kb_path=kb, mtu=mtu, max_flow_packets=max_flow_packets, check=check,
+                      mode=mode, script=script, rtt_ms=rtt_ms, bw_mbps=bw_mbps, cdn_region=cdn_region)
     except (ValueError, OSError) as e:
         _fail(str(e), as_json)
     _emit(res, as_json)
     if check and res.get("check", {}).get("ok") is False:
         raise typer.Exit(2)
+
+
+def _data_specs(data: list[str]) -> list[tuple[str, str, str | None]]:
+    out = []
+    for d in data:
+        region, sep, rest = d.partition("=")
+        if not sep:
+            region, rest = "default", d
+        path, _, truth = rest.partition(",")
+        out.append((region, path, truth or None))
+    return out
+
+
+@app.command("train")
+def train_cmd(
+    data: list[str] = typer.Option(..., "--data", help="REGION=labeled.parquet[,truth.csv], repeatable. truth.csv: service intervals (an action log, or synth's <out>.actions.csv); without it the knowledge-base category is a weak label."),
+    model: Path = typer.Option(Path("service_model.json"), "--model", "-o", help="Model file to write."),
+    holdout: Optional[list[str]] = typer.Option(None, "--holdout", help="Evaluate by holding out whole groups: region, app or time (repeatable)."),
+    window: float = typer.Option(30.0, help="Slice length, seconds."),
+    step: float = typer.Option(15.0, help="Slice step, seconds."),
+    key: Optional[str] = typer.Option(None, "--key", help="HMAC key used at ingest, to match ue_ip in truth files to UE tokens."),
+    seed: int = typer.Option(0),
+    as_json: bool = JSON_OPT,
+):
+    """Train the behaviour classifier: vod, live, short_video or other per UE, app and window.
+
+    Features are region-independent (idle share, burst and gap lengths, rate variation, flow
+    structure, packet size mix); no addresses, server names or absolute rates. Needs the 'ml' extra.
+    """
+    from . import classify as mod
+    from .anon import load_key
+
+    try:
+        res = mod.train(_data_specs(data), model, key=load_key(key), window=window, step=step, holdout=holdout,
+                        seed=seed)
+    except (ValueError, RuntimeError, OSError) as e:
+        _fail(str(e), as_json)
+    _emit(res, as_json)
+
+
+@app.command("classify")
+def classify_cmd(
+    labeled: Path = typer.Argument(..., exists=True, dir_okay=False, help="labeled.parquet to classify."),
+    model: Path = typer.Option(..., "--model", exists=True, dir_okay=False, help="Model from upsynth train."),
+    out: Path = typer.Option(Path("services.csv"), "--out", "-o", help="One row per slice with the service and probabilities."),
+    truth: Optional[Path] = typer.Option(None, "--truth", exists=True, dir_okay=False, help="Service intervals to score against."),
+    key: Optional[str] = typer.Option(None, "--key", help="HMAC key used at ingest (for ue_ip in the truth file)."),
+    as_json: bool = JSON_OPT,
+):
+    """Tell per UE, app and window whether it is vod, live, short_video or other."""
+    from . import classify as mod
+    from .anon import load_key
+
+    try:
+        res = mod.classify(labeled, model, out, truth=truth, key=load_key(key))
+    except (ValueError, RuntimeError, OSError) as e:
+        _fail(str(e), as_json)
+    _emit(res, as_json)
+
+
+SCRIPT_EXAMPLE = {
+    "sessions": [{
+        "persona": "commuter, 10 minutes on Bilibili, likes food videos",
+        "ue": "ue1",
+        "start": 0,
+        "steps": [{"action": "launch"}, {"action": "scroll_feed", "dwell": 4}, {"action": "open_video"},
+                  {"action": "watch", "dwell": 35}, {"action": "back"}, {"action": "search", "query": "火锅"}],
+    }]
+}
+
+
+@app.command("actions")
+def actions_cmd(
+    profile_path: Path = typer.Argument(..., exists=True, dir_okay=False, metavar="PROFILE", help="profile.json built with --actions."),
+    as_json: bool = JSON_OPT,
+):
+    """List the actions a profile knows, for writing synth --script files.
+
+    Per action: typical dwell, its range, flows it opens, main servers, likely next actions. Script
+    format: {"sessions": [{"persona", "ue", "start", "steps": [{"action", "dwell", "query"}]}]};
+    "dwell" is optional (sampled from the profile when missing; synth reports steps whose dwell lies
+    outside what the profile saw), an action may be written without the "<app>/" prefix when that is
+    unique.
+    """
+    from . import actions as act
+    from .synth import load_profile
+
+    prof = load_profile(profile_path)
+    if prof.action_model is None:
+        _fail("profile has no action model; build it with: upsynth profile ... --actions <log>|bursts", as_json)
+    res = {"source": prof.action_model.source, "actions": act.describe(prof.action_model),
+           "script_example": SCRIPT_EXAMPLE}
+    if as_json:
+        _emit(res, True)
+        return
+    typer.echo(f"source: {res['source']}")
+    for a in res["actions"]:
+        typer.echo(f"{a['action']:28s} dwell~{a['dwell_median_s']}s flows~{a['flows_per_instance']}  "
+                   f"next: {', '.join(a['next'])}  servers: {', '.join(a['top_servers'])}")
+    typer.echo("script example: " + json.dumps(SCRIPT_EXAMPLE, ensure_ascii=False))
 
 
 @app.command("kb")

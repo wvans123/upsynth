@@ -27,7 +27,7 @@ MAC_UPF_N6, MAC_ROUTER = bytes.fromhex("020000000b07"), bytes.fromhex("020000000
 
 LABEL_COLUMNS = ["flow_id", "app", "category", "transport", "template", "ue", "start", "end", "iface", "ip_version",
                  "proto", "ue_ip", "ue_port", "server_ip", "server_port", "domain", "alpn", "ja4", "qfi", "teid_ul",
-                 "teid_dl", "packets", "bytes"]
+                 "teid_dl", "packets", "bytes", "service", "action", "action_id"]
 
 
 def load_profile(path: str | Path) -> Profile:
@@ -53,7 +53,10 @@ def run(profile: str | Path, out: str | Path, labels: str | Path | None = None, 
         duration: float = 300.0, iface: str = "n3", seed: int = 0, start: float | None = None,
         apps: list[str] | None = None, kb_path: str | Path | None = None, mtu: int | None = None,
         dns_server: str = "8.8.8.8", dns_server6: str = "2001:4860:4860::8888", max_flow_packets: int = 5000,
-        check: bool = True) -> dict:
+        check: bool = True, mode: str = "flows", script: str | Path | None = None, rtt_ms: float = 0.0,
+        bw_mbps: float | None = None, cdn_region: str | None = None) -> dict:
+    """mode "flows": sessions of flows (app mix and transitions); "actions": flows opened by actions, walked from
+    the profile's action chain or played from a script (JSON, schemas.Script), which implies "actions"."""
     if iface not in ("n3", "n6"):
         raise ValueError("iface must be n3 or n6")
     prof = load_profile(profile)
@@ -68,10 +71,25 @@ def run(profile: str | Path, out: str | Path, labels: str | Path | None = None, 
     mtu = mtu or (1400 if iface == "n3" else 1500)
     registry = load_registry(find_tshark())
     beh = Behaviour(prof, rng, kb_templates=kb_templates, mtu=mtu, max_flow_packets=max_flow_packets,
-                    registry=registry)
+                    registry=registry, rtt_ms=rtt_ms, bw_mbps=bw_mbps, cdn_region=cdn_region)
     ue_list = beh.make_ues(ues)
     t0 = DEFAULT_START if start is None else start
-    specs = beh.schedule(ue_list, t0, duration, set(apps) if apps else None)
+    action_rows: list[dict] = []
+    if script or mode == "actions":
+        from ..actions import check_script
+        from ..schemas import Script
+
+        if prof.action_model is None:
+            raise ValueError("profile has no action model; build it with: upsynth profile ... --actions <log>|bursts")
+        sc = None
+        if script:
+            sc = check_script(prof.action_model, Script.model_validate_json(Path(script).read_text(encoding="utf-8")))
+        specs, action_rows = beh.schedule_actions(ue_list, t0, duration, sc)
+        mode = "actions"
+    elif mode == "flows":
+        specs = beh.schedule(ue_list, t0, duration, set(apps) if apps else None)
+    else:
+        raise ValueError("mode must be flows or actions")
     resolver4 = ipaddress.IPv4Address(dns_server).packed
     resolver6 = ipaddress.IPv6Address(dns_server6).packed
     enc = Encap(iface)
@@ -100,7 +118,8 @@ def run(profile: str | Path, out: str | Path, labels: str | Path | None = None, 
             dpk, _ = dns_lookup(ctx, resolver, spec.domain, srv, spec.start - ctx.ms(40, 120))
             label_id += 1
             rows.append(_row(label_id, "dns", "dns", "dns", "dns", ue, dpk, iface, v6, 17, ue_ip, resolver, 53,
-                             spec.domain, None, None, spec.qfi, _sport(dpk[0][2])))
+                             spec.domain, None, None, spec.qfi, _sport(dpk[0][2]), spec.extras.get("action"),
+                             spec.extras.get("action_id"), spec.extras.get("service")))
             out_pkts += [(t, up, l3, spec.qfi) for t, up, l3 in dpk]
         fn = TEMPLATES.get(spec.template) or TEMPLATES[spec.transport]
         pk = fn(spec, ctx)
@@ -108,7 +127,8 @@ def run(profile: str | Path, out: str | Path, labels: str | Path | None = None, 
         proto = 6 if spec.transport in ("tls_tcp", "tcp") else 17
         ja4 = ja4_from_raw(spec.ja4_r) if spec.ja4_r and spec.transport in ("tls_tcp", "quic") else None
         rows.append(_row(label_id, spec.app, spec.category, spec.transport, spec.template, ue, pk, iface, v6, proto,
-                         ue_ip, srv, spec.server_port, spec.domain, ",".join(spec.alpn) or None, ja4, spec.qfi, port))
+                         ue_ip, srv, spec.server_port, spec.domain, ",".join(spec.alpn) or None, ja4, spec.qfi, port,
+                         spec.extras.get("action"), spec.extras.get("action_id"), spec.extras.get("service")))
         by_app[spec.app] += 1
         by_template[spec.template] += 1
         out_pkts += [(t, up, l3, spec.qfi) for t, up, l3 in pk]
@@ -152,6 +172,13 @@ def run(profile: str | Path, out: str | Path, labels: str | Path | None = None, 
         cw = csv.DictWriter(f, fieldnames=LABEL_COLUMNS)
         cw.writeheader()
         cw.writerows(rows)
+    actions_path = None
+    if action_rows:
+        actions_path = out.with_suffix(".actions.csv")
+        with open(actions_path, "w", newline="", encoding="utf-8") as f:
+            cw = csv.DictWriter(f, fieldnames=["action_id", "ue", "ue_ip", "action", "service", "start", "end"])
+            cw.writeheader()
+            cw.writerows({**a, "start": f"{a['start']:.6f}", "end": f"{a['end']:.6f}"} for a in action_rows)
     result = {
         "profile": str(profile),
         "output": str(out),
@@ -160,7 +187,11 @@ def run(profile: str | Path, out: str | Path, labels: str | Path | None = None, 
         "ues": ues,
         "duration": duration,
         "seed": seed,
+        "mode": mode,
         "flows": len(specs),
+        "actions": len(action_rows) if action_rows else None,
+        "actions_csv": str(actions_path) if actions_path else None,
+        "script_dwell_outside_profile": beh.dwell_outside if script else None,
         "dns_lookups": sum(1 for r in rows if r["app"] == "dns"),
         "frames": frames,
         "by_app": dict(by_app.most_common()),
@@ -179,7 +210,7 @@ def _sport(l3: bytes) -> int:
 
 
 def _row(fid, app, category, transport, template, ue, pk, iface, v6, proto, ue_ip, srv, sport, domain, alpn, ja4,
-         qfi, ue_port) -> dict:
+         qfi, ue_port, action=None, action_id=None, service=None) -> dict:
     return {
         "flow_id": fid,
         "app": app,
@@ -204,4 +235,7 @@ def _row(fid, app, category, transport, template, ue, pk, iface, v6, proto, ue_i
         "teid_dl": f"0x{ue.teid_dl:08x}" if iface == "n3" else "",
         "packets": len(pk),
         "bytes": sum(len(p[2]) for p in pk),
+        "service": service or "other",
+        "action": action or "",
+        "action_id": action_id or "",
     }

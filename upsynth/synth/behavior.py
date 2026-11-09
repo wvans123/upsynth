@@ -8,15 +8,21 @@ from __future__ import annotations
 
 import hashlib
 import ipaddress
+import re
 from collections import Counter
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 import numpy as np
 
+from .. import pacing
 from ..profile import CHAIN_EDGES
-from ..schemas import SEQ_LEN, AppProfile, Categorical, Hist, Profile, UEProfile
+from ..schemas import SERVICE_OF_CATEGORY, SEQ_LEN, AppProfile, Categorical, Hist, Profile, UEProfile
 from ..tls import CHROME_JA4_R, CHROME_QUIC_JA4_R, normalize_raw
 from .protocols import TCP_CODECS, TLS_TCP_PORTS, fits, free_port
+
+if TYPE_CHECKING:
+    from ..schemas import Script
 
 
 @dataclass
@@ -94,9 +100,16 @@ def _alpn_for(ja4_r: str, offered: list[str]) -> list[str]:
 
 class Behaviour:
     def __init__(self, profile: Profile, rng: np.random.Generator, *, kb_templates: dict[str, str] | None = None,
-                 mtu: int = 1500, max_flow_packets: int = 5000, registry: dict | None = None):
+                 mtu: int = 1500, max_flow_packets: int = 5000, registry: dict | None = None,
+                 rtt_ms: float = 0.0, bw_mbps: float | None = None, cdn_region: str | None = None):
+        """rtt_ms, bw_mbps, cdn_region imitate another network: extra delay before server answers, a cap on a
+        flow's rate, and the region code CDN host names carry (cn-jssz-ct-01-01.bilivideo.com)."""
+        self.rtt_ms = rtt_ms
+        self.bw_mbps = bw_mbps
+        self.cdn_region = cdn_region
         self.registry = registry or {}
         self.remapped: Counter = Counter()
+        self.dwell_outside = 0  # script steps whose dwell lies outside what the profile saw
         self.p = profile
         self.s = Sampler(rng)
         self.rng = rng
@@ -149,8 +162,86 @@ class Behaviour:
             f.flow_id = i
         return flows
 
+    def schedule_actions(self, ues: list[UE], start: float, duration: float,
+                         script: "Script | None" = None) -> tuple[list[FlowSpec], list[dict]]:
+        """Flows driven by actions: from a script (one session per UE), or walked from the profile's action chain.
+
+        Returns the flows and the action instances (ground truth: ue, action, start, end)."""
+        model = self.p.action_model
+        if model is None:
+            raise ValueError("profile has no action model; build it with: upsynth profile ... --actions <log>|bursts")
+        sigs = {a.name: a for a in model.actions}
+        end = start + duration
+        flows: list[FlowSpec] = []
+        done: list[dict] = []
+        sessions = list(script.sessions) if script else []
+        by_name = {u.name: u for u in ues}
+        plan = []
+        free = [u for u in ues if not any(s.ue == u.name for s in sessions)]
+        for s in sessions:
+            u = by_name.get(s.ue) if s.ue else (free.pop(0) if free else None)
+            if u is not None:
+                plan.append((u, s))
+        if not script:
+            plan = [(u, None) for u in ues]
+        for ue, sess in plan:
+            t = start + (sess.start if sess else float(self.rng.uniform(0, min(10.0, duration * 0.05))))
+            # the whole action sequence first: a page left for another service closes its connections, so
+            # flows end with the run of same-service actions that opened them
+            seq = []
+            steps = iter(sess.steps) if sess else None
+            name = None
+            while t < end:
+                if steps is not None:
+                    step = next(steps, None)
+                    if step is None:
+                        break
+                    name, dwell = step.action, step.dwell
+                else:
+                    name = self.s.cat(model.transitions[name]) if name in model.transitions else self.s.cat(model.start)
+                    dwell = None
+                sig = sigs[name]
+                if dwell is None:
+                    dwell = self.s.hist(sig.dwell)
+                else:
+                    if not sig.dwell.edges[0] <= dwell <= sig.dwell.edges[-1]:
+                        self.dwell_outside += 1
+                    dwell = min(max(dwell, 0.1), 3600.0)
+                seq.append((name, t, dwell))
+                t += dwell
+            run_end = [0.0] * len(seq)
+            for j in range(len(seq) - 1, -1, -1):
+                name, t, dwell = seq[j]
+                same_next = j + 1 < len(seq) and sigs[seq[j + 1][0]].service == sigs[name].service
+                run_end[j] = run_end[j + 1] if same_next else min(t + dwell, end)
+            for j, (name, t, dwell) in enumerate(seq):
+                sig = sigs[name]
+                aid = len(done) + 1
+                for slot in sig.slots:
+                    if self.rng.random() >= slot.p or slot.app not in self.apps:
+                        continue
+                    for _ in range(max(1, int(self.s.hist(slot.count)))):
+                        ts = t + min(self.s.hist(slot.offset), max(dwell, 0.05))
+                        if ts >= end:
+                            continue
+                        # bulk flows (the stream, segment fetches) close when the user leaves; small connections
+                        # stay in the client's pool and are reused
+                        cut = max(run_end[j] - ts, 0.2) if slot.app.endswith("+bulk") else None
+                        f = self.flow(ue, self.apps[slot.app], ts, domain=slot.domain, endpoint=slot.endpoint,
+                                      max_dur=cut)
+                        f.extras["action"] = name
+                        f.extras["action_id"] = aid
+                        f.extras["service"] = sig.service
+                        flows.append(f)
+                done.append({"action_id": aid, "ue": ue.name, "ue_ip": str(ipaddress.ip_address(ue.ip4)), "action": name,
+                             "service": sig.service, "start": t, "end": min(t + dwell, end)})
+        flows.sort(key=lambda f: f.start)
+        for i, f in enumerate(flows, 1):
+            f.flow_id = i
+        return flows, done
+
     def _next_app(self, pr: UEProfile | None, prev: str | None, only: set[str] | None) -> str | None:
-        cands = [a for a in self.apps if only is None or a in only]
+        cands = [a for a in self.apps if "@" not in a and (only is None or a in only)]
         if not cands:
             return None
         for _ in range(8):
@@ -168,8 +259,9 @@ class Behaviour:
 
     # ------------------------------------------------------------ one flow
 
-    def flow(self, ue: UE, ap: AppProfile, start: float) -> FlowSpec:
-        ep = self.s.cat(ap.endpoints)
+    def flow(self, ue: UE, ap: AppProfile, start: float, *, domain: str | None = None,
+             endpoint: str | None = None, max_dur: float | None = None) -> FlowSpec:
+        ep = endpoint or self.s.cat(ap.endpoints)
         if ep:
             transport, _, p = ep.partition("/")
             port = int(p)
@@ -197,7 +289,9 @@ class Behaviour:
             else:
                 ja4_r = CHROME_JA4_R if prefix == "t" else CHROME_QUIC_JA4_R
             ja4_r = normalize_raw(ja4_r)
-        domain = self.s.cat(ap.domains)
+        domain = domain or self.s.cat(ap.domains)
+        if domain and self.cdn_region:
+            domain = re.sub(r"^(cn|ec)-[a-z]+-[a-z]+-", rf"\1-{self.cdn_region}-", domain)
         if domain is None and prefix:
             domain = f"{hashlib.sha1(f'{ap.app}{self.rng.integers(1 << 30)}'.encode()).hexdigest()[:10]}.example.net"
         offered = (self.s.cat(ap.alpn) or "").split(",") if ap.alpn.values else []
@@ -209,10 +303,12 @@ class Behaviour:
         template = template_for(ap, transport, self.kb_templates)
         if template == "web_browsing" and domain and not domain.endswith(".example.net"):
             dns_first = dns_first or self.rng.random() < 0.8
-        return FlowSpec(0, ue.index, ap.app, ap.category, transport, template, start, port, domain, ja4_r, alpn,
-                        int(qfi) if qfi else 1, int(ver), self.shape(ap), dns_first)
+        spec = FlowSpec(0, ue.index, ap.app, ap.category, transport, template, start, port, domain, ja4_r, alpn,
+                        int(qfi) if qfi else 1, int(ver), self.shape(ap, max_dur), dns_first)
+        spec.extras["service"] = SERVICE_OF_CATEGORY.get(ap.category, "other")
+        return spec
 
-    def shape(self, ap: AppProfile) -> list[tuple[int, float]]:
+    def shape(self, ap: AppProfile, max_dur: float | None = None) -> list[tuple[int, float]]:
         rng = self.rng
         n = self._total_packets(ap, 1)
         lens: list[int] = []
@@ -241,12 +337,46 @@ class Behaviour:
             lens.append(self._tail_size(ap, up, tail_mean[up], st % nb) * (1 if up else -1))
         lens = [max(-self.mtu, min(self.mtu, v)) for v in lens]
         iats = [0.0] + [self.s.hist(ap.iat) for _ in range(len(lens) - 1)]
+        if self.rtt_ms:  # server answers arrive later on a longer path
+            for i in range(1, min(len(lens), SEQ_LEN)):
+                if lens[i - 1] > 0 > lens[i]:
+                    iats[i] += self.rtt_ms
         dur = self.s.hist(ap.duration) * 1000.0
         total = sum(iats)
-        if len(lens) > SEQ_LEN and total > 0 and dur > 0:
+        if len(lens) > SEQ_LEN and ap.on_s and ap.off_s and dur >= 3000:
+            iats = self._pace(lens, iats, dur / 1000.0, ap)
+        elif len(lens) > SEQ_LEN and total > 0 and dur > 0:
             k = dur / total
             iats = [x * k for x in iats]
+        if max_dur is not None:  # the flow closes when the user leaves
+            t, keep = 0.0, 0
+            for keep, g in enumerate(iats, 1):
+                t += g / 1000.0
+                if t > max_dur and keep > 1:
+                    keep -= 1
+                    break
+            lens, iats = lens[:keep], iats[:keep]
         return list(zip(lens, iats))
+
+    def _pace(self, lens: list[int], iats: list[float], dur_s: float, ap: AppProfile) -> list[float]:
+        """Place packets after the first SEQ_LEN into busy runs separated by idle runs (the app's on/off shape)."""
+        head_t = sum(iats[:SEQ_LEN]) / 1000.0
+        tail = lens[SEQ_LEN:]
+        span = max(dur_s - head_t, 0.5)
+        intervals = pacing.timeline(self.rng, lambda: self.s.hist(ap.on_s), lambda: self.s.hist(ap.off_s), span)
+        if self.bw_mbps:
+            need = sum(abs(v) for v in tail) * 8 / (self.bw_mbps * 1e6)
+            busy_t = sum(b - a for a, b in intervals)
+            if busy_t < need:
+                k = need / busy_t
+                intervals = [(a * k, b * k) for a, b in intervals]
+        times = pacing.place(self.rng, intervals, len(tail)) + head_t
+        out = list(iats[:SEQ_LEN])
+        prev = head_t
+        for t in times:
+            out.append(max(0.0, (t - prev) * 1000.0))
+            prev = t
+        return out
 
     def _head(self, ap: AppProfile, c) -> list[int]:
         """The first SEQ_LEN packets from a cluster: per-position states when the profile has them, else the center."""

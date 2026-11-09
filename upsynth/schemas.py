@@ -14,6 +14,7 @@ import pyarrow as pa
 from pydantic import BaseModel, Field, field_validator
 
 SEQ_LEN = 32  # packets kept per flow for the length / inter-arrival sequences
+RATE_BINS = 600  # seconds of per-second byte counts kept per flow
 
 FLOW_SCHEMA = pa.schema(
     [
@@ -37,6 +38,9 @@ FLOW_SCHEMA = pa.schema(
         ("bytes_down", pa.int64()),
         ("seq_len", pa.list_(pa.int16())),  # signed inner IP length, + uplink, - downlink
         ("seq_iat", pa.list_(pa.float32())),  # ms since previous packet of the flow, first is 0
+        ("rate_up", pa.list_(pa.int32())),  # bytes per second since the flow start, first RATE_BINS seconds
+        ("rate_down", pa.list_(pa.int32())),
+        ("hs_ms", pa.float32()),  # handshake time seen at the capture point: TCP SYN to ACK, QUIC first Initial to reply
         ("end_reason", pa.string()),  # fin, rst, idle, eof
         ("dns_name", pa.string()),  # query name that resolved to the server IP, same UE, time window
         ("sni", pa.string()),  # TLS or QUIC server name
@@ -58,6 +62,10 @@ LABEL_FIELDS = [
 ]
 
 LABELED_SCHEMA = pa.schema(list(FLOW_SCHEMA) + [pa.field(n, t) for n, t in LABEL_FIELDS])
+
+# service classes the behaviour classifier tells apart; knowledge-base categories map onto them
+SERVICES = ("vod", "live", "short_video", "other")
+SERVICE_OF_CATEGORY = {"video": "vod", "live_streaming": "live", "short_video": "short_video"}
 
 LABEL_SOURCES = ("sni", "http_host", "dns", "ja4", "asn", "port", "ndpi", "none")
 CONFIDENCE = {"sni": 0.95, "http_host": 0.9, "dns": 0.85, "ja4": 0.75, "asn": 0.6, "port": 0.4, "ndpi": 0.5,
@@ -199,6 +207,9 @@ class AppProfile(BaseModel):
     # bigger packets than the handshake-heavy start the chain is learned from
     tail_len_up: Hist | None = None
     tail_len_down: Hist | None = None
+    # busy / idle run lengths (s) of flows lasting a few seconds or more (pacing.py)
+    on_s: Hist | None = None
+    off_s: Hist | None = None
     seq_clusters: list[Cluster]
     chain: MarkovChain | None = None
     concurrency: Hist  # parallel flows of this app per UE at a flow start
@@ -228,8 +239,55 @@ class ProfileMeta(BaseModel):
     dns_ratio: float  # DNS flows per non-DNS flow; synth emits a lookup before a flow with this probability
 
 
+class FlowSlot(BaseModel):
+    """One kind of flow an action opens: drawn from an app profile, to one server name and endpoint."""
+
+    app: str  # an AppProfile in this profile (folded apps point at "other")
+    domain: str | None  # knowledge-base matched name, None for unnamed flows
+    endpoint: str  # "tls_tcp/443"
+    p: float  # share of action instances that open this slot
+    count: Hist  # flows of this slot when it is opened
+    offset: Hist  # seconds from the action start to the flow start
+
+
+class ActionSig(BaseModel):
+    name: str  # "bilibili/open_video"; from an action log, or "bilibili/b3" for a burst cluster
+    service: str = "other"  # one of SERVICES
+    instances: int
+    slots: list[FlowSlot]
+    dwell: Hist  # seconds until the next action of the same UE
+
+
+class ActionModel(BaseModel):
+    source: Literal["log", "bursts"]
+    actions: list[ActionSig]
+    start: Categorical  # first action of a session
+    transitions: dict[str, Categorical]  # next action given the current one
+
+
 class Profile(BaseModel):
     meta: ProfileMeta
     apps: list[AppProfile]
     ues: list[UEProfile]
     app_transitions: dict[str, Categorical]  # next app given previous app of the same UE
+    action_model: ActionModel | None = None
+
+
+# ---------------------------------------------------------------- action scripts (synth --script)
+
+
+class ScriptStep(BaseModel):
+    action: str  # full name "bilibili/watch" or the part after "/" when that is unique
+    dwell: float | None = None  # seconds until the next step; sampled from the profile when missing
+    query: str | None = None  # free text for a search step; recorded, not on the wire (HTTPS)
+
+
+class ScriptSession(BaseModel):
+    persona: str | None = None
+    ue: str | None = None  # "ue1"...; sessions without one take the UEs in order
+    start: float = 0.0  # seconds after the synth start time
+    steps: list[ScriptStep]
+
+
+class Script(BaseModel):
+    sessions: list[ScriptSession]

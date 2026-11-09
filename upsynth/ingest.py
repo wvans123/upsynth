@@ -22,7 +22,7 @@ from . import quic, tls
 from .anon import Anonymizer
 from .asn import AsnDB
 from .pcapio import Packet, ReadStats, iter_packets
-from .schemas import FLOW_SCHEMA, SEQ_LEN
+from .schemas import FLOW_SCHEMA, RATE_BINS, SEQ_LEN
 
 # ports where the side using them is the server
 SERVER_PORTS = {
@@ -64,6 +64,10 @@ class Flow:
     bytes_down: int = 0
     seq_len: list = field(default_factory=list)
     seq_iat: list = field(default_factory=list)
+    rate_up: list = field(default_factory=list)
+    rate_down: list = field(default_factory=list)
+    syn_t: float | None = None
+    hs_ms: float | None = None
     teid_ul: int | None = None
     teid_dl: int | None = None
     qfi: int | None = None
@@ -183,6 +187,14 @@ class Ingest:
         if n < SEQ_LEN:
             f.seq_len.append(min(p.ip_len, 32767) if up else -min(p.ip_len, 32767))
             f.seq_iat.append(0.0 if n == 0 else (p.ts - f.last) * 1000.0)
+        sec = int(p.ts - f.start)
+        if 0 <= sec < RATE_BINS:
+            series = f.rate_up if up else f.rate_down
+            if len(series) <= sec:
+                series.extend([0] * (sec + 1 - len(series)))
+            series[sec] += p.ip_len
+        if f.proto == 17 and f.hs_ms is None and not up and f.pkts_down == 0 and f.pkts_up > 0:
+            f.hs_ms = (p.ts - f.start) * 1000.0
         if up:
             f.pkts_up += 1
             f.bytes_up += p.ip_len
@@ -206,10 +218,13 @@ class Ingest:
                 f.fin_up = True
             else:
                 f.fin_down = True
+        if up and f.hs_ms is None and f.syn_t is not None and fl & TCP_ACK and not fl & TCP_SYN:
+            f.hs_ms = (p.ts - f.syn_t) * 1000.0
         if not up or f.hello_done:
             return
         if fl & TCP_SYN:
             f.client_isn = p.tcp_seq
+            f.syn_t = p.ts
             return
         if not p.payload:
             return
@@ -382,6 +397,9 @@ class Ingest:
             cols["bytes_down"].append(f.bytes_down)
             cols["seq_len"].append(f.seq_len)
             cols["seq_iat"].append([round(x, 3) for x in f.seq_iat])
+            cols["rate_up"].append(f.rate_up)
+            cols["rate_down"].append(f.rate_down)
+            cols["hs_ms"].append(round(f.hs_ms, 3) if f.hs_ms is not None else None)
             cols["end_reason"].append(f.end_reason)
             cols["dns_name"].append(f.dns_name)
             cols["sni"].append(f.sni)
