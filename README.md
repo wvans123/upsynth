@@ -42,7 +42,7 @@ upsynth classify labeled.parquet --model model.json -o services.csv
 没有现成抓包时，先用自带的样例走一遍：
 
 ```
-python -c "from upsynth.sample import make_sample; make_sample('sample.pcap')"
+upsynth sample -o sample.pcap
 ```
 
 `examples/` 里有一份 Open5GS + UERANSIM 跑出来的 N3 抓包和它的剖面。自己搭这套实验室（含 macOS 上的 lima 虚拟机）见 `docs/LAB.md`。

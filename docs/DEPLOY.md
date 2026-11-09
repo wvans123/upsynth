@@ -45,7 +45,7 @@ cd upsynth && git pull && uv tool install --force '.[ml]'
 
 ```
 upsynth --help
-python3 -c "from upsynth.sample import make_sample; make_sample('/tmp/s.pcap')"
+upsynth sample -o /tmp/s.pcap
 upsynth ingest /tmp/s.pcap -o /tmp/f.parquet --json
 upsynth label  /tmp/f.parquet -o /tmp/l.parquet --json
 upsynth profile /tmp/l.parquet -o /tmp/p.json --json

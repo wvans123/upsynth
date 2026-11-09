@@ -311,6 +311,21 @@ def kb_cmd(
     _emit(res, as_json)
 
 
+@app.command("sample")
+def sample_cmd(
+    out: Path = typer.Option(Path("sample.pcap"), "--out", "-o", help="Capture to write."),
+    iface: str = typer.Option("n3", "--iface", help="n3 (GTP-U) or n6 (plain IP)."),
+    as_json: bool = JSON_OPT,
+):
+    """Write a small deterministic capture (made-up users and servers) to try the pipeline on."""
+    from .sample import make_sample
+
+    if iface not in ("n3", "n6"):
+        _fail("--iface must be n3 or n6", as_json)
+    res = make_sample(out, iface=iface)
+    _emit({"output": str(out), **(res or {})}, as_json)
+
+
 @app.command()
 def version():
     """Print the upsynth version."""
