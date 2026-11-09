@@ -23,17 +23,4 @@ upsynth synth   examples/open5gs_profile.json -o out.pcap --ues 10 --duration 30
 
 ## 自己产一份
 
-需要一台 Ubuntu 24.04（真机或虚拟机，arm64 和 amd64 都行），root 权限。macOS 上可以用 lima：
-
-```
-limactl start --name=fivegc --cpus=4 --memory=4 --vm-type=vz template:ubuntu-24.04
-limactl shell fivegc -- sudo bash examples/open5gs/setup.sh       # 装 Open5GS、MongoDB、UERANSIM，加测试用户
-limactl shell fivegc -- sudo env DURATION=150 bash examples/open5gs/run.sh
-limactl copy fivegc:/tmp/upsynth-capture/n3.pcap .
-```
-
-国内网络可以给 setup.sh 加 `UBUNTU_MIRROR=http://mirrors.ustc.edu.cn/ubuntu-ports`（amd64 用 `.../ubuntu`）。
-
-`run.sh` 起 gNB 和 UE，把 UE 的 `uesimtun0` 挪进单独的网络命名空间，默认路由和 DNS（223.5.5.5）都走 5G，所以 DNS、HTTPS、QUIC、NTP 全部经过 N3。抓包在回环口（`udp port 2152`）和 ogstun。UE 做什么在 `traffic.sh` 里改。
-
-用户的 IMSI、K、OPc 和 UERANSIM 自带的 `config/open5gs-ue.yaml` 一致，Open5GS 用默认配置（PLMN 999-70，UE 地址池 10.45.0.0/16）。
+步骤、国内镜像、虚拟机的启停、带动作记录的抓法，都在 `docs/LAB.md`。脚本在 `open5gs/`：`setup.sh` 装核心网，`run.sh` 抓包，`traffic.sh` 是默认的网页访问，`human_bilibili.py` 是带动作记录的 B 站操作。

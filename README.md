@@ -36,7 +36,7 @@ upsynth synth   profile.json    -o out.pcap --ues 20 --duration 600 --iface n3
 python -c "from upsynth.sample import make_sample; make_sample('sample.pcap')"
 ```
 
-`examples/` 里有一份 Open5GS + UERANSIM 跑出来的真实 N3 抓包和它的剖面，做法见 `examples/README.md`。
+`examples/` 里有一份 Open5GS + UERANSIM 跑出来的 N3 抓包和它的剖面。自己搭这套实验室（含 macOS 上的 lima 虚拟机）见 `docs/LAB.md`。
 
 ## 数据规矩
 
@@ -61,6 +61,7 @@ skill 在 `skills/upsynth/SKILL.md`，前提是 `upsynth` 命令在 PATH 上。
 
 ## 文档
 
+- `docs/LAB.md`：搭 Open5GS + UERANSIM，macOS 用 lima，换一台机器按这个做。
 - `docs/DESIGN.md`：每一步怎么做、数据格式、和简报不同的取舍。
 - `skills/upsynth/SKILL.md`：给 agent 的用法、脱敏规则、常见坑。
 - `BRIEF.md`：最初的开工简报。
