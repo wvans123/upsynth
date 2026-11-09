@@ -73,6 +73,32 @@ def test_classifier_generalises_across_regions():
     assert set(ev["per_group"]) == {"shanghai", "jiangsu", "north"}
 
 
+def test_truth_by_wall_clock_and_whole_capture(tmp_path):
+    from datetime import datetime
+
+    p = tmp_path / "log.csv"
+    p.write_text("start,end,service,app\n2026-11-10 14:00:00,2026-11-10 14:10:00,short_video,douyin\n",
+                 encoding="utf-8")
+    t = classify.read_truth(p)
+    assert t[0]["t0"] == datetime(2026, 11, 10, 14).timestamp() and t[0]["t1"] - t[0]["t0"] == 600
+    assert t[0]["app"] == "douyin"
+    assert classify.read_truth("live")[0]["service"] == "live"
+    p.write_text("start,end,service\n0,10,film\n", encoding="utf-8")
+    with pytest.raises(ValueError):
+        classify.read_truth(p)
+
+
+def test_truth_skips_background_apps():
+    s = [{"ue": "p", "app": "douyin", "category": "short_video", "group": "douyin", "t0": 0, "t1": 30},
+         {"ue": "p", "app": "wechat", "category": "messaging", "group": "wechat", "t0": 0, "t1": 30},
+         {"ue": "p", "app": "unknown", "category": "other", "group": "srv:x", "t0": 0, "t1": 30},
+         {"ue": "p", "app": "kuaishou", "category": "short_video", "group": "kuaishou", "t0": 0, "t1": 30}]
+    classify.label_truth(s, classify.read_truth("short_video"))
+    assert [x["label"] for x in s] == ["short_video", None, "short_video", "short_video"]
+    classify.label_truth(s, [{"t0": 0, "t1": 30, "service": "short_video", "ue": None, "app": "douyin"}])
+    assert [x["label"] for x in s] == ["short_video", None, "short_video", None]
+
+
 def test_weak_labels_skip_mixed_apps():
     s = [{"app": "huya", "category": "live_streaming", "group": "huya"},
          {"app": "bilibili", "category": "video", "group": "bilibili"},

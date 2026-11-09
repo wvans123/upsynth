@@ -85,6 +85,9 @@ def _l3_from_link(dlt: int, buf: bytes) -> bytes | None:
         return buf[20:] if struct.unpack_from("!H", buf, 0)[0] in (0x0800, 0x86DD) else None
     if dlt in (0, 108):  # BSD loopback: 4-byte address family in host or network order
         return buf[4:]
+    if dlt in (149, 258) and len(buf) >= 12:  # Apple PKTAP (iPhone over rvictl): header length, then inner link type
+        hl, inner = struct.unpack_from("<I", buf, 0)[0], struct.unpack_from("<I", buf, 8)[0]
+        return _l3_from_link(inner, buf[hl:]) if inner not in (149, 258) and hl <= len(buf) else None
     return None
 
 

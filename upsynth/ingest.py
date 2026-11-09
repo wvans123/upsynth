@@ -133,9 +133,11 @@ def _decide_ue_side(p: Packet) -> bool:
 
 class Ingest:
     def __init__(self, anon: Anonymizer, asn_db: AsnDB | None = None, *, udp_idle: float = 120.0,
-                 tcp_idle: float = 600.0, dns_window: float = 600.0, ndpi: dict | None = None):
+                 tcp_idle: float = 600.0, dns_window: float = 600.0, ndpi: dict | None = None,
+                 ue: str | None = None):
         self.anon = anon
         self.asn_db = asn_db
+        self.ue = ue  # one handset: its IPv4 and IPv6 addresses (and address changes) are one UE
         self.udp_idle = udp_idle
         self.tcp_idle = tcp_idle
         self.dns = DnsCache(dns_window)
@@ -168,7 +170,7 @@ class Ingest:
             ue, srv = (a, b) if up else (b, a)
             f = Flow(p.proto, p.ver, ue[0], ue[1], srv[0], srv[1], p.ts, "n3" if p.teid is not None else "n6")
             f.last = p.ts
-            f.dns_name = self.dns.get(f.ue_ip, f.srv_ip, p.ts)
+            f.dns_name = self.dns.get(self.ue or f.ue_ip, f.srv_ip, p.ts)
             self.active[key] = f
         up = p.src == f.ue_ip and p.sport == f.ue_port
         self._count(f, p, up)
@@ -324,9 +326,9 @@ class Ingest:
         if not up and m.qr == dpkt.dns.DNS_R and qname:
             for rr in m.an:
                 if rr.type == dpkt.dns.DNS_A and len(rr.rdata) == 4:
-                    self.dns.add(f.ue_ip, rr.rdata, qname, p.ts)
+                    self.dns.add(self.ue or f.ue_ip, rr.rdata, qname, p.ts)
                 elif rr.type == dpkt.dns.DNS_AAAA and len(rr.rdata) == 16:
-                    self.dns.add(f.ue_ip, rr.rdata, qname, p.ts)
+                    self.dns.add(self.ue or f.ue_ip, rr.rdata, qname, p.ts)
 
     # ------------------------------------------------------------ flow end
 
@@ -379,7 +381,7 @@ class Ingest:
                 ndpi = _match_ndpi(self.ndpi, f)
             cols["flow_id"].append(self.flow_id)
             cols["iface"].append(f.iface)
-            cols["ue"].append(a.ip(f.ue_ip))
+            cols["ue"].append(self.ue or a.ip(f.ue_ip))
             cols["server"].append(a.ip(f.srv_ip))
             cols["ip_version"].append(f.ver)
             cols["proto"].append(f.proto)
@@ -446,10 +448,11 @@ def ndpi_index(path: str | Path) -> dict:
 
 
 def run(pcap: str | Path, out: str | Path, *, key: bytes, asn_db: str | Path | None = None,
-        udp_idle: float = 120.0, tcp_idle: float = 600.0, dns_window: float = 600.0, use_ndpi: bool = False) -> dict:
+        udp_idle: float = 120.0, tcp_idle: float = 600.0, dns_window: float = 600.0, use_ndpi: bool = False,
+        ue: str | None = None) -> dict:
     db = AsnDB.load(asn_db) if asn_db else None
     ndpi = ndpi_index(pcap) if use_ndpi else None
-    ing = Ingest(Anonymizer(key), db, udp_idle=udp_idle, tcp_idle=tcp_idle, dns_window=dns_window, ndpi=ndpi)
+    ing = Ingest(Anonymizer(key), db, udp_idle=udp_idle, tcp_idle=tcp_idle, dns_window=dns_window, ndpi=ndpi, ue=ue)
     stats = ReadStats()
     out = Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)

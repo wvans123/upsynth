@@ -21,6 +21,7 @@ import ipaddress
 import json
 import math
 from collections import Counter, defaultdict
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -135,27 +136,58 @@ def _features(active: list[dict], w: float, W: int) -> dict | None:
 # ---------------------------------------------------------------- labels
 
 
-def read_truth(path: str | Path, anon: Anonymizer | None = None) -> list[dict]:
-    """Service intervals from an action log (t_start,t_end,service) or synth actions.csv (start,end,service,ue_ip)."""
-    with open(path, newline="", encoding="utf-8") as f:
+def _time(v: str) -> float:
+    """Unix seconds, or a local wall-clock time such as 2026-11-10 14:05:00."""
+    try:
+        return float(v)
+    except ValueError:
+        return datetime.fromisoformat(v.strip()).timestamp()
+
+
+def read_truth(spec: str | Path, anon: Anonymizer | None = None) -> list[dict]:
+    """Service intervals.
+
+    spec is a service name (the whole capture is that service), or a CSV: an action log
+    (t_start,t_end,service[,app]), synth's actions.csv (start,end,service,ue_ip), or a hand-written log
+    (start,end,service[,app]) with Unix seconds or local times.
+    """
+    if str(spec) in SERVICES:
+        return [{"t0": -math.inf, "t1": math.inf, "service": str(spec), "ue": None, "app": None}]
+    with open(spec, newline="", encoding="utf-8-sig") as f:
         rows = list(csv.DictReader(f))
     out = []
     for r in rows:
         if not r.get("service"):
             continue
+        if r["service"] not in SERVICES:
+            raise ValueError(f"{spec}: unknown service {r['service']!r}, use one of {', '.join(SERVICES)}")
         ue = None
         if r.get("ue_ip") and anon is not None:
             ue = anon.ip(ipaddress.ip_address(r["ue_ip"]).packed)
-        out.append({"t0": float(r.get("t_start") or r["start"]), "t1": float(r.get("t_end") or r["end"]),
-                    "service": r["service"], "ue": ue})
+        out.append({"t0": _time(r.get("t_start") or r["start"]), "t1": _time(r.get("t_end") or r["end"]),
+                    "service": r["service"], "ue": ue, "app": (r.get("app") or "").strip() or None})
     return out
+
+
+NEUTRAL = {"video", "short_video", "live_streaming", "cdn", "web", "other"}  # categories a media session can show up as
+
+
+def _fits(s: dict, t: dict) -> bool:
+    """Does a truth interval speak for this slice? Background apps (chat, updates, ads) keep no label."""
+    if t["ue"] is not None and t["ue"] != s["ue"]:
+        return False
+    if t["service"] == "other" or s["group"].startswith("srv:"):
+        return True
+    if t.get("app"):
+        return s["app"] == t["app"] or s["category"] in ("cdn", "other")
+    return s["category"] in NEUTRAL
 
 
 def label_truth(sl: list[dict], truth: list[dict]) -> None:
     for s in sl:
         cover = Counter()
         for t in truth:
-            if t["ue"] is not None and t["ue"] != s["ue"]:
+            if not _fits(s, t):
                 continue
             ov = min(s["t1"], t["t1"]) - max(s["t0"], t["t0"])
             if ov > 0:
@@ -256,7 +288,7 @@ def evaluate(sl: list[dict], by: str, seed: int = 0, folds: int = 5) -> dict:
 
 
 def load_slices(data: list[tuple[str, str, str | None]], *, key: bytes, window: float, step: float) -> list[dict]:
-    """data: (region, labeled.parquet, truth.csv or None)."""
+    """data: (region, labeled.parquet, truth.csv or a service name or None)."""
     anon = Anonymizer(key)
     out = []
     for region, path, truth in data:
@@ -291,7 +323,7 @@ def train(data: list[tuple[str, str, str | None]], model_out: str | Path, *, key
     return res
 
 
-def classify(labeled: str | Path, model: str | Path, out: str | Path, *, truth: str | Path | None = None,
+def classify(labeled: str | Path, model: str | Path, out: str | Path, *, truth: str | None = None,
              key: bytes | None = None) -> dict:
     lgb = _lgb()
     meta = json.loads(Path(model).read_text(encoding="utf-8"))

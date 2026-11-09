@@ -30,6 +30,15 @@ upsynth synth   profile.json    -o out.pcap --ues 20 --duration 600 --iface n3
 
 每个命令加 `--json` 输出一个 JSON 对象，`--help` 有全部参数。`upsynth kb` 检查知识库、查域名、导出 PFD。
 
+识别点播、直播、短视频：
+
+```
+upsynth train    --data shanghai=labeled.parquet,live --holdout app -o model.json
+upsynth classify labeled.parquet --model model.json -o services.csv
+```
+
+用真手机或运营商现网数据训练，步骤见 `docs/PHONE.md`。
+
 没有现成抓包时，先用自带的样例走一遍：
 
 ```
@@ -61,6 +70,7 @@ skill 在 `skills/upsynth/SKILL.md`，前提是 `upsynth` 命令在 PATH 上。
 
 ## 文档
 
+- `docs/PHONE.md`：真手机怎么抓包、怎么打标签、怎么训练和检验；现网数据怎么用。
 - `docs/LAB.md`：搭 Open5GS + UERANSIM，macOS 用 lima，换一台机器按这个做。
 - `docs/DESIGN.md`：每一步怎么做、数据格式、和简报不同的取舍。
 - `skills/upsynth/SKILL.md`：给 agent 的用法、脱敏规则、常见坑。

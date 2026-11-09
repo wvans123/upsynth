@@ -37,6 +37,15 @@ def test_gtpu_fields_kept_as_tokens(work):
     assert all(r["seq_len"][0] > 0 for r in tcp)
 
 
+def test_one_handset_is_one_ue(work, tmp_path):
+    many = pq.read_table(work / "flows.parquet").to_pylist()
+    ingest.run(work / "sample_n6.pcap", tmp_path / "phone.parquet", key=KEY, ue="phone1")
+    rows = pq.read_table(tmp_path / "phone.parquet").to_pylist()
+    assert len({r["ue"] for r in many}) > 1
+    assert {r["ue"] for r in rows} == {"phone1"}
+    assert sum(bool(r["dns_name"]) for r in rows) >= sum(bool(r["dns_name"]) for r in many)
+
+
 def test_no_raw_addresses_or_payload(work):
     raw = (work / "flows.parquet").read_bytes()
     for ip in ("10.45.0.2", "10.45.0.3", "8.8.8.8", "198.18."):
@@ -92,6 +101,22 @@ def test_pcapng_input(work, tmp_path):
     a = ingest.run(src, tmp_path / "a.parquet", key=KEY)
     b = ingest.run(tmp_path / "s.pcapng", tmp_path / "b.parquet", key=KEY)
     assert a["flows"] == b["flows"] == 106 and a["with_sni"] == b["with_sni"]
+
+
+def test_apple_pktap_input(work, tmp_path):
+    import struct
+
+    import dpkt
+
+    src = work / "sample_n6.pcap"
+    with open(src, "rb") as f, open(tmp_path / "rvi0.pcap", "wb") as g:
+        w = dpkt.pcap.Writer(g, linktype=258)
+        for ts, buf in dpkt.pcap.Reader(f):
+            hdr = struct.pack("<III", 108, 1, 1) + b"\0" * 96  # length, next type, inner DLT_EN10MB
+            w.writepkt(hdr + buf, ts)
+    a = ingest.run(src, tmp_path / "a.parquet", key=KEY)
+    b = ingest.run(tmp_path / "rvi0.pcap", tmp_path / "b.parquet", key=KEY)
+    assert b["flows"] == a["flows"] and b["with_sni"] == a["with_sni"] and b["skipped"]["non_ip"] == 0
 
 
 def test_dns_name_needs_same_ue_and_window():

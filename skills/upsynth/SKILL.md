@@ -44,6 +44,12 @@ synth
 - `ports_remapped` 不为空，说明有不透明流原端口上挂着别的 Wireshark 解析器，已换到空闲端口。
 - 服务器地址在 198.18.0.0/15 和 2001:db8::/32，不指向真实主机。
 
+识别业务（点播 / 直播 / 短视频 / 其它，要装 `upsynth[ml]`）
+- `upsynth train --data 地区=labeled.parquet[,标签] --holdout app --holdout region -o model.json`。标签是业务名（整份抓包就是这件事），或时间表 CSV（`start,end,service[,app]`，本地时间或 Unix 秒）。不给标签时用知识库类别做弱标签。
+- 手机上抓的包 ingest 时加 `--ue phoneA`，整份算一台手机。
+- `upsynth classify labeled.parquet --model model.json -o services.csv [--truth 标签]`。
+- 看 `evaluation` 里留出 App、留出地区的 `macro_f1`，不看随机切分。详细做法在仓库的 `docs/PHONE.md`。
+
 ## 脱敏规则（必须遵守）
 
 - 真实抓包和 flows.parquet、labeled.parquet 只留在本机，不上传、不贴进对话、不提交到仓库。

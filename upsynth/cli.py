@@ -60,6 +60,7 @@ def ingest(
     tcp_idle: float = typer.Option(600.0, help="TCP flow idle timeout, seconds (TCP flows normally end on FIN or RST)."),
     dns_window: float = typer.Option(600.0, help="A DNS answer names a server IP for this many seconds, for the same UE only."),
     ndpi: bool = typer.Option(False, "--ndpi", help="Also run nDPI through nfstream for weak labels (pip install 'upsynth[ndpi]')."),
+    ue: Optional[str] = typer.Option(None, "--ue", help="The capture is one handset (taken on a phone): every flow gets this UE name, so its IPv4 and IPv6 addresses and address changes stay one UE."),
     as_json: bool = JSON_OPT,
 ):
     """Cut a capture into flows: pcap -> flows.parquet.
@@ -75,7 +76,7 @@ def ingest(
 
     try:
         res = mod.run(pcap, out, key=load_key(key), asn_db=asn_db, udp_idle=udp_idle, tcp_idle=tcp_idle,
-                      dns_window=dns_window, use_ndpi=ndpi)
+                      dns_window=dns_window, use_ndpi=ndpi, ue=ue)
     except (ValueError, RuntimeError, OSError) as e:
         _fail(str(e), as_json)
     _emit(res, as_json)
@@ -196,7 +197,7 @@ def _data_specs(data: list[str]) -> list[tuple[str, str, str | None]]:
 
 @app.command("train")
 def train_cmd(
-    data: list[str] = typer.Option(..., "--data", help="REGION=labeled.parquet[,truth.csv], repeatable. truth.csv: service intervals (an action log, or synth's <out>.actions.csv); without it the knowledge-base category is a weak label."),
+    data: list[str] = typer.Option(..., "--data", help="REGION=labeled.parquet[,TRUTH], repeatable. TRUTH: a service name (vod, live, short_video, other) when the whole capture is one thing, or a CSV of service intervals (start,end,service[,app]; Unix seconds or local times like 2026-11-10 14:05:00; an action log or synth's <out>.actions.csv works too). Without TRUTH the knowledge-base category is a weak label."),
     model: Path = typer.Option(Path("service_model.json"), "--model", "-o", help="Model file to write."),
     holdout: Optional[list[str]] = typer.Option(None, "--holdout", help="Evaluate by holding out whole groups: region, app or time (repeatable)."),
     window: float = typer.Option(30.0, help="Slice length, seconds."),
@@ -226,7 +227,7 @@ def classify_cmd(
     labeled: Path = typer.Argument(..., exists=True, dir_okay=False, help="labeled.parquet to classify."),
     model: Path = typer.Option(..., "--model", exists=True, dir_okay=False, help="Model from upsynth train."),
     out: Path = typer.Option(Path("services.csv"), "--out", "-o", help="One row per slice with the service and probabilities."),
-    truth: Optional[Path] = typer.Option(None, "--truth", exists=True, dir_okay=False, help="Service intervals to score against."),
+    truth: Optional[str] = typer.Option(None, "--truth", help="Score against: a service name for the whole capture, or a CSV of service intervals (as for train --data)."),
     key: Optional[str] = typer.Option(None, "--key", help="HMAC key used at ingest (for ue_ip in the truth file)."),
     as_json: bool = JSON_OPT,
 ):
