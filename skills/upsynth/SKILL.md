@@ -56,6 +56,7 @@ synth
 - IP 和 TEID 在 ingest 第一步就换成 HMAC token，密钥在 `~/.upsynth/key`（或 `--key`、`UPSYNTH_KEY`）。不要把密钥发出去。
 - 不保留 payload；profile.json 只有直方图、占比、聚类中心，可以出公司。
 - 给用户看结果时，用应用名和统计数，不要列 token 或单条流。
+- agent 读到的内容会发给模型服务。只读命令的 `--json` 汇总，不打开 pcap、parquet，不 `head`/`cat` 明细 CSV。
 
 ## 扩知识库
 

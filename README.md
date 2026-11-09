@@ -70,6 +70,7 @@ skill 在 `skills/upsynth/SKILL.md`，前提是 `upsynth` 命令在 PATH 上。
 
 ## 文档
 
+- `docs/DEPLOY.md`：装到公司的 Linux 服务器（能上网、数据不出），以及 agent 在那里只看汇总。
 - `docs/PHONE.md`：真手机怎么抓包、怎么打标签、怎么训练和检验；现网数据怎么用。
 - `docs/LAB.md`：搭 Open5GS + UERANSIM，macOS 用 lima，换一台机器按这个做。
 - `docs/DESIGN.md`：每一步怎么做、数据格式、和简报不同的取舍。
